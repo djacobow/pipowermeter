@@ -229,8 +229,7 @@ class ServerConnection(object):
             else:
                 print('Got error code fetching params from server.')
         except Exception as e:
-            print('Got exception fetching params.')
-            print(e)
+            print('Got exception fetching params: {0}'.format(repr(e)))
 
 
     def _selfProvision(self):
@@ -277,7 +276,7 @@ class ServerConnection(object):
                     print('Could not self-provision. Exiting.')
                     raise Exception('self_provisioning_bad_result_or_could_not_store')
             except Exception as f:
-                print('Self provisioning failed.')
+                print('Self provisioning failed. Reason: {0}'.format(repr(f)))
                 raise Exception('self_provisioning_failed')
 
 
