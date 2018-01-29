@@ -2,8 +2,8 @@
 
 from sys import exit
 from os import system
+from atm90e26_i2c import atm90e26_i2c
 import time
-import kromek
 import ServerConnection
 import TimerLoop
 import Backgrounder
@@ -11,10 +11,16 @@ import json
 
 base_config = {
     'upload_period': 60,
+    'read_period': 5,
     'config_check_period': 7200,
     'ping_period': 900,
     'tick_length': 0.5,
-    'sensor_params': { },
+    'sensor_params': { 
+        'vars': [
+            'urms','irmsl','freq','pmeanl','qmeanl','smeanl','pfl','panglel',
+            'apenergy','anenergy','rpenergy','rnenergy'
+        ],
+    },
     'max_consec_net_errs': 10,
     'mail_check_period': 7200,
     'bground_check_period': 5,
@@ -36,36 +42,23 @@ def synchronizeSystemClock():
 
 
 def pre_run():
-    kdevs = kromek.discover()
-    print('Discovered %s' % kdevs)
-    if len(kdevs) <= 0:
-        return
-
-    try:
-        kconn = kromek.connect(kdevs[0])
-    except:
-        return None
-
-    try:
-        ser = kromek.get_value(kconn,param='serial')
-    except:
-        return None
+    afe = atm90e26_i2c()
+    ser = '12345678'
 
     server_config = {
         'provisioning_token_path': './provisioning_token.json',
-        'url_base': 'https://skunkworks.lbl.gov/radmon',
-        #'url_base': 'http://localhost:9090/radmon',
+        'url_base': 'http://192.168.0.102:9090/pwrmon',
         'credentials_path': './credentials.json',
         'params_path': './device_params.json',
-        'device_name': None,
-        'device_type': 'kromek_d3s',
-        'device_serial': ser['serial'].encode('ascii'),
+        'device_name': 'pipowermeter_proto_0',
+        'device_type': 'atm90e26_i2c_meter',
+        'device_serial': ser.encode('ascii'),
     }
 
     sconn = ServerConnection.ServerConnection(server_config)
 
     cfg = { k:base_config[k] for k in base_config }
-    cfg['kconn'] = kconn
+    cfg['afe'] = afe
     cfg['sconn'] = sconn
 
     if False:
@@ -77,26 +70,13 @@ def pre_run():
 
 def readSensor(cfg):
     print('readSensor()')
-    fake_kromek = False 
 
     try:
-        sdata = {}
-        if fake_kromek:
-            sdata = {
-                'serial': 'blee bloop',
-                'bias': 123,
-                'measurement': [1,2,3,4,5,6,7],
-            }
-        else:
-            for group in ['serial','status','measurement','gain','bias','lld-g','lld-n']:
-                res = kromek.get_value(cfg['kconn'],param=group)
-                for k in res:
-                    sdata[k] = res[k]
+        sdata = cfg['afe'].getRegs(cfg['sensor_params']['vars'])
         return sdata
 
     except Exception as e:
-        print('well, that didn\'t work')
-        print(e)
+        print('well, that didn\'t work, because: {0}'.format(repr(e)))
         return None
 
 
@@ -105,12 +85,28 @@ def readSensor(cfg):
 class CapHandlers(object):
     def __init__(self, cfg):
         self.cfg = cfg
+        self.cfg['tempdata'] = {}
+
+    # this removes some metadata from reading from the
+    # meter that is nice for debug but the server has
+    # no use for it
+    def stripUnwantedData(self,din):
+        for k in din:
+            for v in ['raw','aname','addr']:
+                if v in din[k]:
+                    del din[k][v]
 
     def takeReading(self, name, now):
-        sdata = readSensor(self.cfg)
-        res = self.cfg['sconn'].push(sdata)
+        ts_sec_ms = time.time()
+        ts_sec = int(ts_sec_ms + 0.5)
+        data = readSensor(self.cfg)
+        self.stripUnwantedData(data)
+        self.cfg['tempdata'][ts_sec] = data
+
+    def doPush(self, name, now):
+        res = self.cfg['sconn'].push(self.cfg['tempdata'])
+        self.cfg['tempdata'] = {}
         print(res)
-        return False
 
     def checkNetErrs(self, name, now):
         if self.cfg['sconn'].getStats()['consec_net_errs'] > self.cfg['max_consec_net_errs']:
@@ -159,7 +155,8 @@ def mymain(cfg):
     mh = MessageHandler(cfg['sconn'])
 
     te.addHandler(ch.doPing,       cfg['ping_period'])
-    te.addHandler(ch.takeReading,  cfg['upload_period'])
+    te.addHandler(ch.takeReading,  cfg['read_period'])
+    te.addHandler(ch.doPush,       cfg['upload_period'])
     te.addHandler(ch.checkNetErrs, cfg['upload_period'])
     te.addHandler(ch.cfgCheck,     cfg['config_check_period'])
     te.addHandler(mh.checkNew,     cfg['mail_check_period'])
