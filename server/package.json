@@ -1,0 +1,19 @@
+{
+  "name": "radmonserver",
+  "version": "1.0.0",
+  "description": "receive kromek d3s data, eventually do something interesting with it",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Dave Jacobowitz",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "aws-sdk": "^2.104.0",
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "js-sha512": "^0.7.0",
+    "sqlite3": "^3.1.13",
+    "uuid": "^3.1.0"
+  }
+}
