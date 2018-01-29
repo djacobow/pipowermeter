@@ -59,12 +59,12 @@ if (require.main === module) {
     app.use(bodyParser.urlencoded({extended: true, limit: '50mb'}));
     app.use(bodyParser.json({limit:'50mb'}));
 
-    app.use('/radmon/device', devrouter);
-    app.use('/radmon/app', approuter);
-    app.use('/radmon', toprouter);
+    app.use('/pwrmon/device', devrouter);
+    app.use('/pwrmon/app', approuter);
+    app.use('/pwrmon', toprouter);
 
     app.listen(port);
-    console.log('RadMonrunning on port ' + port);
+    console.log('PowerMon running on port ' + port);
 }
 
 

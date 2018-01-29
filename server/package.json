@@ -1,7 +1,7 @@
 {
-  "name": "radmonserver",
+  "name": "powerserver",
   "version": "1.0.0",
-  "description": "receive kromek d3s data, eventually do something interesting with it",
+  "description": "receive power measurement data, eventually do something interesting with it",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

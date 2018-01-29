@@ -1,5 +1,5 @@
 [Unit]
-Description=Berkeley Lab RadMon Backend
+Description=PiPowerMeter Backend
 
 [Service]
 Type=simple
@@ -8,8 +8,8 @@ User=dgj
 Group=dgj
 RestartSec=10
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=/home/dgj/projects/radmon/server
-ExecStart=/usr/bin/node /home/dgj/projects/radmon/server/index.js
+WorkingDirectory=/home/dgj/projects/pipowermeter/server
+ExecStart=/usr/bin/node /home/dgj/projects/pipowermeter/server/index.js
 
 [Install]
 WantedBy=multi-user.target
