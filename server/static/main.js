@@ -2,6 +2,7 @@
 console.log('start');
 var senselems = {};
 var current_results = {};
+var display_varnames = {};
 
 var makeChartFromArray = function(type, target, data, options = null) {
     console.log('makeChartFromArry()');
@@ -71,44 +72,32 @@ var makeUL = function(target, data, names) {
     return ul;
 };
 
-var makeLeft = function(name, d) {
-    // console.log(d.sensor_data);
-    var tdl = senselems[name].tdl;    
+var makeLeft = function(devname, varname, d) {
+    var tdl = senselems[devname].tdl;    
     removeChildren(tdl);
 
     var title = document.createElement('a');
-    title.innerText = name;
-    title.href = 'app/status/' + name;
+    title.innerText = devname;
+    title.href = 'app/status/' + devname;
     tdl.appendChild(title);
      
     var cdiv = document.createElement('div');
+    cdiv.style.height = '400px';
     tdl.appendChild(cdiv);
     var carry = [];
-    carry.push(['bin','count']);
-    for (var j=0;j<d.sensor_data.spectrum.length;j++) {
-        carry.push([j,d.sensor_data.spectrum[j]]);
+    carry.push(['time',varname]);
+    for (var i=0; i<d.timestamps.length; i++) {
+        carry.push([new Date(d.timestamps[i]*1000).toISOString(),d[varname][i]]);
     }
 
+    // console.log(JSON.stringify(carry,null,2));
     makeChartFromArray('line',
                        cdiv,
                        carry,
-                       {'title':name});
+                       {'title':devname});
 };
 
 var tablenames = {
-    sensor_fields: {
-        'Neutron Count': { n: 'neutron_count', u: '' },
-        'Integration Time': { n: 'time', u: 'ms' },
-        'Temperature': { n: 'temperature', u: '\u2103' },
-        'Device Serial': { n: 'serial', u: '' },
-        'Gain': {n : 'gain', u: '' },
-        'Bias': {n : 'bias', u: '' },
-        'LLD (gamma)': { n: 'lld-g', u: '' },
-        'LLD (neutron)': { n: 'lld-n', u: '' },
-        'Battery Level': { n: 'batteryLevel', u: '%' },
-        'Charge Rate': { n: 'batteryChargeRate', u: '' },
-        'Battery Temp': { n: 'batteryTemperature', u: '\u2103' },
-    },
     message_fields: {
         'Date': { n: 'date', u: '' },
         'Node Name': { n: 'node_name', u: '' },
@@ -119,11 +108,6 @@ var tablenames = {
         'service.uptime': { n: 'diagnostic.service.uptime', u: '' },
         'Type': { n: 'source_type', u: '' },
     },
-};
-
-var makeCenter = function(name, d) {
-    var tdc = senselems[name].tdc;    
-    makeUL(tdc, d.sensor_data, tablenames.sensor_fields);
 };
 
 var addLocalIPs = function(d) {
@@ -174,12 +158,22 @@ var makeRight = function(name, d) {
         el.style.color = 'green';
     }
     tdr.appendChild(el);
+
+    var s = document.createElement('select');
+    s.addEventListener('change', function(ev) {
+        display_varnames[name] = s.value; 
+        checkTimeSeries(name,s.value,function() {});
+    });
+    tdr.appendChild(s);
+    populateVariableNameDropDown(s, name, d);
+
+
 };
 
 
 var getSensorList = function(cb) {
     console.log('getSensorList()');
-    getJSON('/radmon/app/sensornames', function(err, data) {
+    getJSON('/pwrmon/app/sensornames', function(err, data) {
         if (err) {
             console.log('Error getting sensor list: ' + err);
             return cb(err);
@@ -189,19 +183,39 @@ var getSensorList = function(cb) {
     });
 };
 
-var checkData = function(name, cb) {
-    console.log('checkData()');
-    getJSON('/radmon/app/status/' + name, function(err, new_data) {
+
+
+var checkTimeSeries = function(devname, varname, cb) {
+    console.log('checkTimeSeries()');
+    getJSON('/pwrmon/app/tsdata/' + devname + '/' + varname, function(err, new_data) {
+        if (err) {
+            console.log('checkTimeSeries err: ' + err);
+            return cb('err');
+        } else if (!new_data) {
+            console.log('no data or empty data');
+            return cb('missing sensor?');
+        } else {
+            console.log('getData OK');
+            makeLeft(devname, varname, new_data);
+            return cb(null);
+        }
+    });
+};
+
+
+var checkStatus = function(name, cb) {
+    console.log('checkStatus()');
+    getJSON('/pwrmon/app/status/' + name, function(err, new_data) {
         var old_data = current_results[name];
     
         if (err) {
-            console.log('checkData err: ' + err);
+            console.log('checkStatus err: ' + err);
             return cb('err');
         } else if (!new_data || !old_data) {
-            console.log('checkData err, missing sensor');
+            console.log('checkStatus err, missing sensor');
             return cb('err missing sensor');
         } else if (new_data) {
-            console.log('checkData ok');
+            console.log('checkStatus ok');
             var old_image_date = new Date(old_data.date || 0);
             var new_image_date = new Date(new_data.date);
             var old_ping_date  = old_image_date;
@@ -226,11 +240,11 @@ var checkData = function(name, cb) {
             } 
 
             if (refresh) {
-                makeLeft(name, new_data);
-                makeCenter(name, new_data);
                 makeRight(name, new_data);
             }
+
             current_results[name] = new_data;
+
             return cb(null,new_data);
         } else {
             return cb('skip');
@@ -250,18 +264,14 @@ var makeDeviceLayout = function(senslist,cb) {
         var ntr = document.createElement('tr');
         toptable.appendChild(ntr);
         tdl = document.createElement('td');
-        tdc = document.createElement('td');
         tdr = document.createElement('td');
-        tdl.style.width = "50%";
-        tdc.style.width = "25%";
+        tdl.style.width = "75%";
         tdr.style.width = "25%";
         ntr.appendChild(tdl);
-        ntr.appendChild(tdc);
         ntr.appendChild(tdr);
         senselems[cname] = {
             tr: ntr,
             tdl: tdl,
-            tdc: tdc,
             tdr: tdr,
         };
         current_results[cname] = {
@@ -269,16 +279,38 @@ var makeDeviceLayout = function(senslist,cb) {
             busy: false,
             date: '',
         };
+        display_varnames[cname] = 'urms';
     }
     return cb();
+};
+
+var populateVariableNameDropDown = function(elem, devname, devdata) {
+    if ('sensor_data' in devdata) {
+        var sdata = devdata.sensor_data;
+        var timestamps = Object.keys(sdata);
+        var first_ts = timestamps[0];
+        var varnames = Object.keys(sdata[first_ts]);
+        elem.options.length = 0;
+        varnames.forEach(function(vn) {
+            var op = new Option();
+            op.value = vn;
+            op.text = vn;
+            elem.options.add(op);
+        });
+        if (devname in display_varnames) {
+            elem.value = display_varnames[devname];
+        }
+    }
 };
 
 var startTimer = function() {
     var senslist = Object.keys(senselems);
     async.each(senslist, function(sensn,cb) {
         console.log('async.each: ' + sensn);
-        checkData(sensn, function(cerr, cd) {
-            cb();
+        checkStatus(sensn, function(cerr0, cd1) {
+            checkTimeSeries(sensn, display_varnames[sensn], function(cerr1, cd1) {
+                cb();
+            });
         });
     },
     function (err) {
