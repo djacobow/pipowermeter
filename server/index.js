@@ -14,11 +14,10 @@ var setup_debug_hooks = function(da) {
     var w = function(hname,sname) {
         console.log('Device action: [' + hname + '] ' + sname);
     };
-    da.setHook('provision',w);
-    da.setHook('push',w);
-    da.setHook('ping',w);
-    da.setHook('getparams',w);
-    da.setHook('fetchmail',w);
+    debug_hooknames = ['provision','push','ping','getparams','fetchmail'];
+    for (var i=0; i<debug_hooknames.length; i++) {
+        da.setHook(debug_hooknames[i], w);
+    }
     da.setHook('respondmail', function(hname, sname) {
         w(hname, sname);
         r = da.mb.getResponses();
@@ -41,8 +40,9 @@ if (require.main === module) {
     };
 
     var da = new DataAcceptor(dev_config);
-    setup_debug_hooks(da);
     var ar = new AppRoutes(app_config, da);
+    setup_debug_hooks(da);
+    da.setHook('push', ar.pushHook.bind(ar));
 
     var toprouter = express.Router();
     var devrouter = express.Router();
