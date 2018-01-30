@@ -1,5 +1,5 @@
 [Unit]
-Description=Berkeley Lab RadMon Sensor Daemon 
+Description=Power Meter Daemon
 
 [Service]
 Type=simple
@@ -8,12 +8,11 @@ User=pi
 Group=pi
 RestartSec=10
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=/home/pi/radmon/sensor
-ExecStart=/usr/bin/python3 -u /home/pi/radmon/sensor/capture.py
+WorkingDirectory=/home/pi/projects/pipowermeter/sensor
+ExecStart=/usr/bin/python3 -u /home/pi/projects/pipowermeter/sensor/capture.py
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=radsensor.service
+SyslogIdentifier=pipowermeter.service
 
 [Install]
 WantedBy=multi-user.target
-
