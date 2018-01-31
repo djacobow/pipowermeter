@@ -40,15 +40,26 @@ void setup() {
 
 
 uint32_t last_show = 0;
+bool xyz = false;
+
 void loop() {
     uint32_t now = millis();
-    if ((now - last_show) > 1000) {
-        if (false) {
+
+    if (true) {
+        if ((now - last_show) > 2000) {
+            digitalWrite(pin_energy_indic0, xyz);
+            digitalWrite(pin_energy_indic1, !xyz);
+            xyz = !xyz;
+            last_show = now;
+        }
+    }
+    if (false) {
+        if ((now - last_show) > 30000) {
             digitalWrite(pin_energy_indic0, LOW);
             digitalWrite(pin_energy_indic1, LOW);
             showThings(afe);
+            last_show = now;
         }
-        last_show = now;
     }
     i2c.work();
 };
