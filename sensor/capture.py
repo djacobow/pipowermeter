@@ -10,15 +10,15 @@ import Backgrounder
 import json
 
 base_config = {
-    'upload_period': 60,
+    'upload_period': 120,
     'read_period': 5,
     'config_check_period': 7200,
     'ping_period': 900,
     'tick_length': 0.5,
     'sensor_params': { 
         'vars': [
-            'urms','irmsl','freq','pmeanl','qmeanl','smeanl','pfl','panglel',
-            'apenergy','anenergy','rpenergy','rnenergy'
+            'Urms','Irms','Freq','Pmean','Qmean','Smean','PowerF','Pangle',
+            'APenergy','ANenergy','RPenergy','RNenergy'
         ],
     },
     'max_consec_net_errs': 10,
@@ -43,6 +43,7 @@ def synchronizeSystemClock():
 
 def pre_run():
     afe = atm90e26_i2c()
+    afe.reset()
     ser = '12345678'
 
     server_config = {
@@ -73,6 +74,11 @@ def readSensor(cfg):
 
     try:
         sdata = cfg['afe'].getRegs(cfg['sensor_params']['vars'])
+        if 'Urms' in sdata:
+            print(sdata['urms'])
+        if 'Pmean' in sdata:
+            print(sdata['pmeanl'])
+
         return sdata
 
     except Exception as e:
