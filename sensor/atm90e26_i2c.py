@@ -3,6 +3,8 @@
 import time
 from smbus import SMBus
 
+def debugprint(*args, **kwargs):
+    print( "atm90e26_i2c "+ ' '.join(map(str,args)), **kwargs)
 
 
 class atm90e26_i2c(object):
@@ -118,7 +120,7 @@ class atm90e26_i2c(object):
             for regpair in pairs:
                 if False:
                     cs1_afe = self.getReg('CS1')
-                    print('CS1: {:04x}'.format(cs1_afe['raw']))
+                    debugprint('CS1: {:04x}'.format(cs1_afe['raw']))
 
                 vn = regpair[0]
                 regnames.append(vn)
@@ -136,15 +138,15 @@ class atm90e26_i2c(object):
                 time.sleep(0.01)
                 res0 = self.getReg(vn)
                 time.sleep(0.01)
-                if res0['raw'] != wrval:
-                    print('[{}] wrote: {:04x} got {:04x}'.format(vn, wrval,res0['raw']))
+                if not res0 or res0['raw'] != wrval:
+                    debugprint('[{}] wrote: {:04x} got {:04x}'.format(vn, wrval,res0['raw']))
 
             chk_l &= 0xff
-            print('MY chk_h: {:02x} chk_l: {:02x}'.format(chk_h,chk_l))
+            debugprint('MY chk_h: {:02x} chk_l: {:02x}'.format(chk_h,chk_l))
             return (chk_h << 8) | chk_l
 
 
-        print('- Resetting atm90e26 chip and setting calibration registers.')
+        debugprint('- Resetting atm90e26 chip and setting calibration registers.')
 
         self._startWrite('SoftReset', self.magic['reset'])
         time.sleep(0.5)
@@ -164,7 +166,7 @@ class atm90e26_i2c(object):
         if False:
             cs1_afe = self.getReg('CS1')
             cs2_afe = self.getReg('CS2')
-            print('CS1: {:04x} CS2: {:04x}'.format(cs1_afe['raw'],cs2_afe['raw']))
+            debugprint('CS1: {:04x} CS2: {:04x}'.format(cs1_afe['raw'],cs2_afe['raw']))
 
 
 
@@ -180,10 +182,10 @@ class atm90e26_i2c(object):
             #time.sleep(0.5)
             return reginfo['addr'] 
         except Exception as e:
-            print('- Error writing to i2c device.');
-            print(e)
+            debugprint('- Error writing to i2c device.');
+            debugprint(e)
             try:
-                print('- attempting to restart i2c')
+                debugprint('- attempting to restart i2c')
                 self.__init__()
                 self.reset()
             except Exception as f:
@@ -203,9 +205,9 @@ class atm90e26_i2c(object):
             time.sleep(0.05)
             return True
         except Exception as e:
-            print('- Error writing to i2c device: {0}'.format(repr(e)))
+            debugprint('- Error writing to i2c device: {0}'.format(repr(e)))
             try:
-                print('- attempting to restart i2c')
+                debugprint('- attempting to restart i2c')
                 self.__init__()
                 self.reset()
             except Exception as f:
@@ -213,74 +215,89 @@ class atm90e26_i2c(object):
         return False
 
     def _readState(self):
-        done = False
-        count = 10
-        while not done and count:
+        tries = 10
+        while tries:
             try:
                 data = self.bus.read_i2c_block_data(self.addr, 1, 4)
-                #print("rdata {:02X} {:02X} {:02X} {:02X}".format(data[0],data[1],data[2],data[3]))
                 if data[0] == 0x12:
-                    done = True
                     addr = data[1] & ~0x80; # address without msb
-                    name = self.atm90e26_reverse_addrs.get(data[1],'_unknown')
-                    fmt = self.atm90e26_addrs.get(name,None)
-                    dword = (data[2] << 8) | data[3]
-                    dval = dword + 0
-                    unit = ''
-                    if fmt:
-                        sgn = fmt.get('sgn','unsigned')
-                        if sgn == 'unsigned':
-                            pass
-                        elif sgn == 'complement':
-                            if (dword & 0x8000):
-                                dval -= 65535
-                        elif sgn == 'msb':
-                            if (dword & 0x8000):
-                                dword &= ~0x8000
-                                dval = -dword
-
-                        prec = fmt.get('prec',1)
-                        dval *= prec
-                        unit = fmt.get('unit','')
-
-
-                    return {
-                        'addr': data[1],
-                        'aname': name,
-                        'raw': (data[2] << 8) | data[3],
-                        'value': dval,
-                        'unit': unit
-                    }
+                    word = (data[2] << 8) | data[3]
+                    return { 'addr': addr, 'word': word }
                 else:
-                    count -= 1;
-                    time.sleep(0.025)
+                    tries -= 1
+                    time.sleep(0.01)
             except Exception as e:
-                print(e)
-                count -= 1;
+                debugprint('Exception reading state: {0}'.format(e))
+                tries -= 1;
                 time.sleep(0.10)
                 try:
                     self.__init__()
                 except Exception as f:
                     pass
+            debugprint('_readState tries: {0}'.format(tries))
+
         return None
 
+    def _polishRead(self, rawres):
+        if rawres:
+            name = self.atm90e26_reverse_addrs.get(rawres['addr'],'_unknown')
+            fmt = self.atm90e26_addrs.get(name,None)
+            word = rawres['word']
+            val = word + 0
+            unit = ''
+            if fmt:
+                sgn = fmt.get('sgn','unsigned')
+                if sgn == 'unsigned':
+                    pass
+                elif sgn == 'complement':
+                    if (word & 0x8000):
+                        val -= 65535
+                elif sgn == 'msb':
+                    if (word & 0x8000):
+                        word &= ~0x8000
+                        val = -word
+
+                prec = fmt.get('prec',1)
+                val *= prec
+                unit = fmt.get('unit','')
+                return {
+                    'addr': rawres['addr'],
+                    'aname': name,
+                    'raw': word,
+                    'value': val,
+                    'unit': unit
+                }
+        return None
+
+
     def getReg(self, aname):
-        #print("getReg()")
-        tries = 50
-        res = None
+        tries =10
         while tries:
-            #print("gonna to another _startRead")
             reqaddr = self._startRead(aname)
             if reqaddr:
-                res = self._readState()
-                if res['addr'] == reqaddr:
-                    return res
-                else:
-                    print("address return mismatch. Asked for {:02x} and got {:02x}".format(reqaddr, res['addr']))
+                time.sleep(0.001)
+                res0 = self._readState()
+                lastaddr = self._startRead('LastData')
+                if lastaddr:
+                    time.sleep(0.001)
+                    res1 = self._readState()
+                    if res1:
+                        a0match = res0['addr'] == reqaddr
+                        a1match = res1['addr'] == self.atm90e26_addrs['LastData']['addr']
+                        vmatch  = res0['word'] == res1['word']
+                        if a0match and a1match and vmatch:
+                            return self._polishRead(res0)
+                        else:
+                            if not a0match:
+                                debugprint('Request  return addr {:02x} does not match requested {:02x}'.format(res0['addr'],reqaddr))
+                            if not a1match:
+                                debugprint('LastData return addr {:02x} does not match requested {:02x}'.format(res1['addr'],self.atm90e26_addrs['LastData']['addr']))
+                            if not vmatch:
+                                debugprint('Read value {:04x} does not match LastData value {:04x}'.format(res0['word'],res1['word']))
             else:
-                print("no reqaddr. Maybe {0} isn't right?".format(aname))
+                debugprint("no reqaddr. Maybe {0} isn't right?".format(aname))
             tries -= 1
-
+            debugprint('getReg tries: {0}'.format(tries))
         return None
 
     def getRegs(self, names):
@@ -301,7 +318,7 @@ if __name__ == '__main__':
 
     while True:
         x = r.getRegs(['Freq','Urms','Irms','Pmean','SysStatus','CS1','CS2'])
-        print(json.dumps(x,indent=2,sort_keys=True))
+        debugprint(json.dumps(x,indent=2,sort_keys=True))
         time.sleep(1)
 
 
