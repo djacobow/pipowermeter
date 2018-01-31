@@ -279,7 +279,7 @@ var makeDeviceLayout = function(senslist,cb) {
             busy: false,
             date: '',
         };
-        display_varnames[cname] = 'urms';
+        display_varnames[cname] = 'Urms';
     }
     return cb();
 };
