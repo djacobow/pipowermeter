@@ -1,17 +1,20 @@
 /*jshint esversion:6 */
 
 const MAX_MEMORY_STORAGE_TIME = 1 * 60 * 60; // seconds
+const CLEANING_INTERVAL = 5 * 60 * 1000; // milllisecond
 
 var AppRoutes = function(app_config, dataacceptor) {
     this.config = app_config;
     this.da = dataacceptor;
     this.db = {};
+    this.run_cleaner = true;
 };
 
 AppRoutes.prototype.setupRoutes = function(router) {
     router.get('/sensornames',               this.handleListGet.bind(this));
     router.get('/status/:name',              this.handleStatusGet.bind(this));
     router.get('/tsdata/:devname/:varname',  this.handleTSGet.bind(this));
+    this.cleaner();
 };
 
 AppRoutes.prototype.handleListGet = function(req, res) {
@@ -35,15 +38,31 @@ AppRoutes.prototype.handleStatusGet = function(req, res) {
     res.json(rv);
 };
 
+AppRoutes.prototype.cleaner = function() {
+    if (this.run_cleaner) {
+        this.removeOldData();
+        setTimeout(this.cleaner.bind(this), CLEANING_INTERVAL);
+    }
+};
+
 AppRoutes.prototype.removeOldData = function() {
-    var now = Math.round(((new Date()).getTime()) * 1000 + 0.5);
-    Object.keys(cstate.sensor_data).forEach(function(k) {
-        Object.keys(cstate.sensor_data[k]).foreach(function(ts) {
-            var age = now - ts;
-            if (age > MAX_MEMORY_STORAGE_TIME) {
-                delete cstate.sensor_data[k][ts];
-            }
-        });
+    var now = Math.round(((new Date()).getTime()) / 1000 + 0.5);
+    var tthis = this;
+    var devices = this.da.getdevicelist();
+    devices.forEach(function(k) {
+        var cstate = tthis.da.getdevicestate(k);
+        if (cstate && cstate.sensor_data) {
+            var timestamps = Object.keys(cstate.sensor_data);
+            // console.log(timestamps);
+            timestamps.forEach(function(ts) {
+                tsint = parseInt(ts);
+                // console.log('now: ' + now.toString() + ' ts: ' + tsint.toString());
+                var age = now - tsint;
+                if (age > MAX_MEMORY_STORAGE_TIME) {
+                    delete cstate.sensor_data[ts];
+                }
+            });
+        }
     });
 };
 
