@@ -278,7 +278,7 @@ class atm90e26_i2c(object):
                 else:
                     print("address return mismatch. Asked for {:02x} and got {:02x}".format(reqaddr, res['addr']))
             else:
-                print("no reqaddr")
+                print("no reqaddr. Maybe {0} isn't right?".format(aname))
             tries -= 1
 
         return None
