@@ -75,9 +75,9 @@ def readSensor(cfg):
     try:
         sdata = cfg['afe'].getRegs(cfg['sensor_params']['vars'])
         if 'Urms' in sdata:
-            print(sdata['urms'])
+            print(sdata['Urms'])
         if 'Pmean' in sdata:
-            print(sdata['pmeanl'])
+            print(sdata['Pmean'])
 
         return sdata
 
