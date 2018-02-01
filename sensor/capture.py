@@ -2,7 +2,7 @@
 
 from sys import exit
 from os import system
-from atm90e26_i2c import atm90e26_i2c
+from atm90e26 import atm90e26
 import time
 import ServerConnection
 import TimerLoop
@@ -44,7 +44,8 @@ def synchronizeSystemClock():
 
 
 def pre_run():
-    afe = atm90e26_i2c()
+    afe = atm90e26()
+    afe.setup('i2c')
     afe.reset()
     ser = '12345678'
 
