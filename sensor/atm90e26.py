@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 import time
-from smbus import SMBus
+
+    # d = spi.xfer2([reg_addr,0,0],61000, 10, 8)
+
 
 def debugprint(*args, **kwargs):
-    print( "atm90e26_i2c "+ ' '.join(map(str,args)), **kwargs)
+    print( "atm90e26 "+ ' '.join(map(str,args)), **kwargs)
 
 
-class atm90e26_i2c(object):
+class atm90e26(object):
 
     def __init__(self):
-        self.bus = SMBus(1)
-        self.addr = 0x32
         self.atm90e26_addrs = {
             'SoftReset'    : { 'addr': 0x00, },
             'SysStatus'    : { 'addr': 0x01, },
@@ -109,6 +109,24 @@ class atm90e26_i2c(object):
         }
 
 
+    def setup(self, iftype = 'i2c'):
+        if iftype == 'i2c':
+            from smbus import SMBus
+            self.bus = SMBus(1)
+            self.addr = 0x32
+            self.iftype = iftype
+        elif iftype == 'spi':
+            import spidev
+            self.spi = spidev.SpiDev()
+            self.spi.open(0, 0)
+            self.spi.max_speed_hz = 61000
+            self.spi.mode = 0x3
+            self.spi_speed_hz = 6100
+            self.spi_bits_per_byte = 8
+            self.spi_cs_delay = 10
+            self.iftype = iftype
+        else:
+            self.iftype = None
 
 
     def reset(self):
@@ -134,7 +152,7 @@ class atm90e26_i2c(object):
                 chk_l += wrv_h
                 chk_l += wrv_l
 
-                self._startWrite(vn, wrval)
+                self.setReg(vn, wrval)
                 time.sleep(0.01)
                 res0 = self.getReg(vn)
                 time.sleep(0.01)
@@ -148,30 +166,34 @@ class atm90e26_i2c(object):
 
         debugprint('- Resetting atm90e26 chip and setting calibration registers.')
 
-        self._startWrite('SoftReset', self.magic['reset'])
+        self.setReg('SoftReset', self.magic['reset'])
         time.sleep(0.5)
 
         if True:
-            self._startWrite('CalStart', self.magic['cal_mode'])
+            self.setReg('CalStart', self.magic['cal_mode'])
             mychk = writeBunch(self, self.calibvals['calibration'])
-            self._startWrite('CS1',mychk)
-            self._startWrite('CalStart', self.magic['check_mode'])
+            self.setReg('CS1',mychk)
+            self.setReg('CalStart', self.magic['check_mode'])
 
         if True:
-            self._startWrite('AdjStart', self.magic['cal_mode'])
+            self.setReg('AdjStart', self.magic['cal_mode'])
             mychk = writeBunch(self, self.calibvals['adjustment'])
-            self._startWrite('CS2',mychk)
-            self._startWrite('AdjStart', self.magic['check_mode'])
+            self.setReg('CS2',mychk)
+            self.setReg('AdjStart', self.magic['check_mode'])
 
-        if False:
+        if True:
             cs1_afe = self.getReg('CS1')
             cs2_afe = self.getReg('CS2')
-            debugprint('CS1: {:04x} CS2: {:04x}'.format(cs1_afe['raw'],cs2_afe['raw']))
+            sys_afe = self.getReg('SysStatus')
+            debugprint('CS1: {:04x} CS2: {:04x} SysStatus: {:04x}'.format(cs1_afe['raw'],cs2_afe['raw'],sys_afe['raw']))
 
 
 
+    def spi_xfer(self, outd):
+        ind = self.spi.xfer2(outd, self.spi_speed_hz, self.spi_cs_delay, self.spi_bits_per_byte)
+        return ind
 
-    def _startRead(self, aname):
+    def _startRead_i2c(self, aname):
         reginfo = self.atm90e26_addrs.get(aname,None)
         if not reginfo:
             return None
@@ -192,29 +214,33 @@ class atm90e26_i2c(object):
                 pass
         return False
 
-    def _startWrite(self, aname, data):
+
+    def setReg(self, aname, data):
         reginfo = self.atm90e26_addrs.get(aname,None)
         if not reginfo:
             return None
 
+        addr = reginfo['addr']
+        d1 = (data >> 8) & 0xff
+        d0 = data & 0xff
         try:
-            addr = reginfo['addr']
-            d1 = (data >> 8) & 0xff
-            d0 = data & 0xff
-            self.bus.write_i2c_block_data(self.addr,addr & ~0x80,[d1,d0])
-            time.sleep(0.05)
+            if self.iftype == 'i2c':
+                self.bus.write_i2c_block_data(self.addr,addr & ~0x80,[d1,d0])
+                time.sleep(0.05)
+            else:
+                self.spi_xfer([addr & ~0x80, d1, d0])
             return True
         except Exception as e:
-            debugprint('- Error writing to i2c device: {0}'.format(repr(e)))
+            debugprint('- Error writing to hardware device: {0}'.format(repr(e)))
             try:
-                debugprint('- attempting to restart i2c')
+                debugprint('- attempting to restart device')
                 self.__init__()
                 self.reset()
             except Exception as f:
                 pass
         return False
 
-    def _readState(self):
+    def _finishRead_i2c(self):
         tries = 10
         while tries:
             try:
@@ -234,7 +260,7 @@ class atm90e26_i2c(object):
                     self.__init__()
                 except Exception as f:
                     pass
-            debugprint('_readState tries: {0}'.format(tries))
+            #debugprint('_finishRead_i2c tries: {0}'.format(tries))
 
         return None
 
@@ -271,16 +297,52 @@ class atm90e26_i2c(object):
 
 
     def getReg(self, aname):
+        if self.iftype == 'i2c':
+            return self.getReg_i2c(aname)
+        else:
+            return self.getReg_spi(aname)
+
+
+    def getReg_spi(self, aname):
+        reginfo = self.atm90e26_addrs.get(aname,None)
+        if not reginfo:
+            return None
+
+        addr = reginfo['addr']
+
+        try:
+            outd = [ addr | 0x80, 0, 0 ]
+            rdata = self.spi_xfer(outd)
+            word0 = rdata[1] << 8 | rdata[2]
+
+            outd = [ self.atm90e26_addrs['LastData']['addr'] | 0x80, 0, 0 ]
+            rdata = self.spi_xfer(outd)
+            word1 = rdata[1] << 8 | rdata[2]
+
+            if word0 == word1:
+                res0 = {
+                    'addr': addr,
+                    'word': word0,
+                }
+                return self._polishRead(res0)
+        except Exception as e:
+            debugprint('Exception reading from SPI: {0}'.format(repr(e)))
+        return None
+
+
+
+
+    def getReg_i2c(self, aname):
         tries =10
         while tries:
-            reqaddr = self._startRead(aname)
+            reqaddr = self._startRead_i2c(aname)
             if reqaddr:
                 time.sleep(0.001)
-                res0 = self._readState()
-                lastaddr = self._startRead('LastData')
+                res0 = self._finishRead_i2c()
+                lastaddr = self._startRead_i2c('LastData')
                 if lastaddr:
                     time.sleep(0.001)
-                    res1 = self._readState()
+                    res1 = self._finishRead_i2c()
                     if res1:
                         a0match = res0['addr'] == reqaddr
                         a1match = res1['addr'] == self.atm90e26_addrs['LastData']['addr']
@@ -311,7 +373,8 @@ class atm90e26_i2c(object):
 
 if __name__ == '__main__':
     import json
-    r = atm90e26_i2c()
+    r = atm90e26()
+    r.setup('spi')
 
     if True:
         r.reset()
