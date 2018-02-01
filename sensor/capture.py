@@ -10,12 +10,14 @@ import Backgrounder
 import json
 
 base_config = {
-    'upload_period': 120,
+    'upload_period': 30,
     'read_period': 5,
     'config_check_period': 7200,
     'ping_period': 900,
     'tick_length': 0.5,
     'sensor_params': { 
+        'sample_count': 5,
+        'cut_count': 1,
         'vars': [
             'Urms','Irms','Freq','Pmean','Qmean','Smean','PowerF','Pangle',
             'APenergy','ANenergy','RPenergy','RNenergy'
@@ -69,7 +71,44 @@ def pre_run():
 
 
 
+def saneRead(cfg):
+
+    def removeExtrema(array,cutcount = 1):
+        array.sort()
+        return array[cutcount:-cutcount]
+
+    adata = []
+    varnames = cfg['sensor_params']['vars']
+
+    for i in range(cfg['sensor_params']['sample_count']):
+        trydata = cfg['afe'].getRegs(varnames)
+        adata.append(trydata)
+
+    values = {}
+    for varname in varnames:
+        darray = [ x[varname]['value'] for x in adata ]
+        no_extrema = removeExtrema(darray,cfg['sensor_params']['cut_count'])
+        avg = sum(no_extrema) / len(no_extrema)
+        values[varname] = { 'value': avg }
+
+    return values
+
+
+
 def readSensor(cfg):
+    try:
+        sdata = saneRead(cfg)
+        if 'Urms' in sdata:
+            print(sdata['Urms'])
+        if 'Pmean' in sdata:
+            print(sdata['Pmean'])
+        return sdata
+    except Exception as e:
+        print('well, that didn\'t work, because: {0}'.format(repr(e)))
+        return None
+
+
+def readSensor_old(cfg):
     print('readSensor()')
 
     try:
