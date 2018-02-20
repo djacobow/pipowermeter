@@ -41,7 +41,7 @@ def gSetup(cfg):
         now = datetime.datetime.now()
         sname = 'Power Data ' + now.isoformat()
         sheetid = g.createSheet(sname, c['parent'])
-        g.addRows(sheetid,[ ['timestamp' + cfg['sensor_params']['vars'] ])
+        g.addRows(sheetid,[ ['timestamp'] + cfg['sensor_params']['vars'] ])
     return g, sheetid
 
 
