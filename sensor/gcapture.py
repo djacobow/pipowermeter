@@ -85,7 +85,7 @@ def saneRead(cfg):
         avg = sum(no_extrema) / len(no_extrema)
         # round to nearest thousandth -- this is actually to stop sending extra
         # long strings with no info in JSON
-        avg = (int(avg * 10000) + 0.5) / 10000
+        avg = (round(avg,5))
         values[varname] = { 'value': avg }
 
     return values
@@ -160,6 +160,8 @@ class CapHandlers(object):
                 rowdata = self.dataToArray(self.cfg['tempdata'])
 
                 res = self.cfg['gconn']['g'].addRows(self.cfg['gconn']['id'], rowdata)
+                if res and res.get('updates',None) and res['updates'].get('updatedCells',None):
+                    self.cfg['tempdata'] = {}
             except Exception as e:
                 print(e)
 

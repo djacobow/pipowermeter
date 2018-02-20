@@ -93,7 +93,7 @@ def saneRead(cfg):
         avg = sum(no_extrema) / len(no_extrema)
         # round to nearest thousandth -- this is actually to stop sending extra
         # long strings with no info in JSON
-        avg = (int(avg * 10000) + 0.5) / 10000
+        avg = (round(avg,5))
         values[varname] = { 'value': avg }
 
     return values
