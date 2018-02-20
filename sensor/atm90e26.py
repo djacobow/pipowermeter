@@ -119,9 +119,9 @@ class atm90e26(object):
             import spidev
             self.spi = spidev.SpiDev()
             self.spi.open(0, 0)
-            self.spi.max_speed_hz = 61000
+            self.spi_speed_hz = 500000 
+            self.spi.max_speed_hz = self.spi_speed_hz 
             self.spi.mode = 0x3
-            self.spi_speed_hz = 6100
             self.spi_bits_per_byte = 8
             self.spi_cs_delay = 10
             self.iftype = iftype
