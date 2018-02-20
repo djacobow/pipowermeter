@@ -45,7 +45,7 @@ def synchronizeSystemClock():
 
 def pre_run():
     afe = atm90e26()
-    afe.setup('i2c')
+    afe.setup('spi')
     afe.reset()
     ser = '12345678'
 
@@ -62,6 +62,7 @@ def pre_run():
     sconn = ServerConnection.ServerConnection(server_config)
 
     cfg = { k:base_config[k] for k in base_config }
+
     cfg['afe'] = afe
     cfg['sconn'] = sconn
 
@@ -90,6 +91,9 @@ def saneRead(cfg):
         darray = [ x[varname]['value'] for x in adata ]
         no_extrema = removeExtrema(darray,cfg['sensor_params']['cut_count'])
         avg = sum(no_extrema) / len(no_extrema)
+        # round to nearest thousandth -- this is actually to stop sending extra
+        # long strings with no info in JSON
+        avg = (int(avg * 10000) + 0.5) / 10000
         values[varname] = { 'value': avg }
 
     return values
@@ -149,9 +153,15 @@ class CapHandlers(object):
         self.stripUnwantedData(data)
         self.cfg['tempdata'][ts_sec] = data
 
+    def is2xx(self, res):
+        if res.status_code > 299 or res.status_code < 200:
+            return False
+        return True
+
     def doPush(self, name, now):
         res = self.cfg['sconn'].push(self.cfg['tempdata'])
-        self.cfg['tempdata'] = {}
+        if self.is2xx(res):
+            self.cfg['tempdata'] = {}
         print(res)
 
     def checkNetErrs(self, name, now):
@@ -207,7 +217,6 @@ def mymain(cfg):
     te.addHandler(ch.cfgCheck,     cfg['config_check_period'])
     te.addHandler(mh.checkNew,     cfg['mail_check_period'])
     te.addHandler(mh.checkComplete,cfg['bground_check_period'])
-
     te.run(cfg['tick_length'])
 
 
