@@ -149,7 +149,7 @@ class CapHandlers(object):
     def dataToArray(self, d):
         names = self.cfg['sensor_params']['vars']
         rdata = []
-        for timestamp in d:
+        for timestamp in sorted(d):
             values = [ d[timestamp][n]['value'] for n in names]
             rdata.append([timestamp] + values)
         return rdata
