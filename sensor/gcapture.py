@@ -52,7 +52,7 @@ def gSetup(cfg):
         import datetime
         g = goog.Googleizer()
         now = datetime.datetime.now()
-        sname = 'Power Data ' + now.isoformat()
+        sname = 'Power Data ' + getSerial() + ' ' + now.isoformat()
         sheetid = g.createSheet(sname, c['parent'])
         col_names = [ ['timestamp'] + cfg['sensor_params']['vars'] + ['serial_number'] ]
         g.addRows(sheetid,col_names)
