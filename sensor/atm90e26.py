@@ -106,8 +106,26 @@ class atm90e26(object):
             'reset': 0x789a,
             'cal_mode': 0x5678,
             'check_mode': 0x8765,
+            'small_power': 0xa987,
         }
 
+    def loadCalibration(self,cdata):
+        for section in self.calibvals:
+            if cdata.get(section,None) is not None:
+                for varn in cdata[section]:
+                    val = cdata[section][varn]
+                    if val < 0:
+                        val = -val
+                        val |= 0x8000
+                    if isinstance(val,str):
+                        val = int(val,16)
+                    idx = 0
+                    while idx < len(self.calibvals[section]):
+                        if self.calibvals[section][idx][0] == varn:
+                            print('Overriding default calibration for ' + varn + ' = ' + str(val))
+                            self.calibvals[section][idx] = (varn, val)
+                            break
+                        idx += 1
 
     def setup(self, iftype = 'i2c'):
         if iftype == 'i2c':
@@ -135,6 +153,7 @@ class atm90e26(object):
             chk_l = 0
             chk_h = 0
             regnames = []
+            plh_wr_stored = None
             for regpair in pairs:
                 if False:
                     cs1_afe = self.getReg('CS1')
@@ -156,8 +175,22 @@ class atm90e26(object):
                 time.sleep(0.01)
                 res0 = self.getReg(vn)
                 time.sleep(0.01)
-                if not res0 or res0['raw'] != wrval:
-                    debugprint('[{}] wrote: {:04x} got {:04x}'.format(vn, wrval,res0['raw']))
+
+                # handle PLconstH specially, since it won't show its 
+                # new value until PLconstL has been written
+                if vn == 'PLconstH':
+                    plh_wr_stored = wrval
+                else:
+                    if not res0 or res0['raw'] != wrval:
+                        debugprint('[{}] wrote: {:04x} got {:04x}'.format(vn, wrval,res0['raw']))
+
+
+                if vn == 'PLconstL':
+                    res1 = self.getReg('PLconstH')
+                    if not res1 or res1['raw'] != plh_wr_stored:
+                        debugprint('[{}] wrote: {:04x} got {:04x}'.format('PLconstH', plh_wr_stored, res1['raw']))
+
+
 
             chk_l &= 0xff
             debugprint('MY chk_h: {:02x} chk_l: {:02x}'.format(chk_h,chk_l))
@@ -375,7 +408,10 @@ if __name__ == '__main__':
     import json
     r = atm90e26()
     r.setup('spi')
+    r.loadCalibration(json.load(open('./device_params.json'))['calibration'])
 
+    # r.setReg('AdjStart', r.magic['cal_mode'])
+    # r.setReg('SmallPMod', r.magic['small_power'])
     if True:
         r.reset()
 
