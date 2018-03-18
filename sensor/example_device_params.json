@@ -1,0 +1,14 @@
+{
+  "calibration": {
+    "calibration": {
+      "PLconstH": 2905,
+      "PLconstL": 57260
+    },
+    "adjustment": {
+      "Ugain": 15027,
+      "IgainL": 36811,
+      "IoffsetL": 63450
+    }
+  }
+}
+
