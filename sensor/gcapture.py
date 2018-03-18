@@ -8,6 +8,7 @@ import TimerLoop
 import Backgrounder
 import json
 import goog
+import Lights
 
 base_config = {
     'upload_period': 30,
@@ -30,6 +31,18 @@ base_config = {
 }
 
 
+def getSerial():
+    cpuserial = "0000000000000000"
+    try:
+        with open('/proc/cpuinfo','r') as fh:
+            for line in fh:
+                if line[0:6]=='Serial':
+                    cpuserial = line[10:26]
+    except:
+        cpuserial = "ERROR000000000"
+    return cpuserial
+
+
 def gSetup(cfg):
     c = cfg['gsheet']
     g = None
@@ -41,7 +54,8 @@ def gSetup(cfg):
         now = datetime.datetime.now()
         sname = 'Power Data ' + now.isoformat()
         sheetid = g.createSheet(sname, c['parent'])
-        g.addRows(sheetid,[ ['timestamp'] + cfg['sensor_params']['vars'] ])
+        col_names = [ ['timestamp'] + cfg['sensor_params']['vars'] + ['serial_number'] ]
+        g.addRows(sheetid,col_names)
     return g, sheetid
 
 
@@ -53,7 +67,9 @@ def pre_run():
 
     cfg = { k:base_config[k] for k in base_config }
 
+    cfg['lights'] = Lights.Lights()
     cfg['afe'] = afe
+    cfg['serial'] = getSerial()
 
     g, sheetid = gSetup(cfg)
     cfg['gconn'] = {
@@ -99,6 +115,7 @@ def readSensor(cfg):
             print(sdata['Urms'])
         if 'Pmean' in sdata:
             print(sdata['Pmean'])
+
         return sdata
     except Exception as e:
         print('well, that didn\'t work, because: {0}'.format(repr(e)))
@@ -144,6 +161,7 @@ class CapHandlers(object):
         data = readSensor(self.cfg)
         self.stripUnwantedData(data)
         self.cfg['tempdata'][ts_sec] = data
+        self.cfg['lights'].show(data['Pmean']['value'])
 
 
     def dataToArray(self, d):
@@ -151,6 +169,7 @@ class CapHandlers(object):
         rdata = []
         for timestamp in sorted(d):
             values = [ d[timestamp][n]['value'] for n in names]
+            values.append(self.cfg['serial'])
             rdata.append([timestamp] + values)
         return rdata
 
