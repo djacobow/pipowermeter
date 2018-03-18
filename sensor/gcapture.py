@@ -78,7 +78,6 @@ def pre_run():
     cfg['afe'] = afe
     cfg['serial'] = getSerial()
 
-    exit()
     g, sheetid = gSetup(cfg)
     cfg['gconn'] = {
         'g': g,
