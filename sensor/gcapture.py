@@ -62,15 +62,23 @@ def gSetup(cfg):
 def pre_run():
     afe = atm90e26()
     afe.setup('spi')
-    afe.reset()
-    ser = '12345678'
 
     cfg = { k:base_config[k] for k in base_config }
+
+    local_overrides = json.load(open('./device_params.json'))
+    for k in local_overrides:
+        cfg[k] = local_overrides[k]
+
+    if cfg.get('calibration',None) is not None:
+        afe.loadCalibration(cfg['calibration'])
+
+    afe.reset()
 
     cfg['lights'] = Lights.Lights()
     cfg['afe'] = afe
     cfg['serial'] = getSerial()
 
+    exit()
     g, sheetid = gSetup(cfg)
     cfg['gconn'] = {
         'g': g,
