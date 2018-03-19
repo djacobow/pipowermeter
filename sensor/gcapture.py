@@ -31,6 +31,15 @@ base_config = {
 }
 
 
+def getIPaddrs():
+    import netifaces
+    rv = {}
+    for n in netifaces.interfaces():
+        adata = netifaces.ifaddresses(n)
+        rv[n] = { t: adata.get(t,[{}])[0].get('addr',None) for t in (2,17) }
+    return rv
+
+
 def getSerial():
     cpuserial = "0000000000000000"
     try:
@@ -54,9 +63,22 @@ def gSetup(cfg):
         now = datetime.datetime.now()
         sname = 'Power Data ' + getSerial() + ' ' + now.isoformat()
         sheetid = g.createSheet(sname, c['parent'])
-        col_names = [ ['timestamp'] + cfg['sensor_params']['vars'] + ['serial_number'] ]
+
+        headers = [ [ 'Device Serial', cfg['serial'] ] ]
+        for ifn in cfg['ips']:
+            if_header = [ 'if_name', ifn ]
+            for atype in (2,17):
+                if_header.append(cfg['ips'][ifn][atype])
+            headers.append(if_header)
+        headers.append([])
+
+
+        g.addRows(sheetid,headers)
+        
+        col_names = [ ['timestamp'] + cfg['sensor_params']['vars'] ]
         g.addRows(sheetid,col_names)
     return g, sheetid
+
 
 
 def pre_run():
@@ -77,6 +99,7 @@ def pre_run():
     cfg['lights'] = Lights.Lights()
     cfg['afe'] = afe
     cfg['serial'] = getSerial()
+    cfg['ips'] = getIPaddrs()
 
     g, sheetid = gSetup(cfg)
     cfg['gconn'] = {
@@ -176,7 +199,6 @@ class CapHandlers(object):
         rdata = []
         for timestamp in sorted(d):
             values = [ d[timestamp][n]['value'] for n in names]
-            values.append(self.cfg['serial'])
             rdata.append([timestamp] + values)
         return rdata
 
