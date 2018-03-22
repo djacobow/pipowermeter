@@ -2,6 +2,7 @@
 
 from sys import exit
 from os import system
+import netifaces
 from atm90e26 import atm90e26
 import time
 import TimerLoop
@@ -32,11 +33,10 @@ base_config = {
 
 
 def getIPaddrs():
-    import netifaces
     rv = {}
     for n in netifaces.interfaces():
         adata = netifaces.ifaddresses(n)
-        rv[n] = { t: adata.get(t,[{}])[0].get('addr',None) for t in (2,17) }
+        rv[n] = { t: adata.get(t,[{}])[0].get('addr',None) for t in (netifaces.AF_LINK,netifaces.AF_INET,netifaces.AF_INET6) }
     return rv
 
 
@@ -67,7 +67,7 @@ def gSetup(cfg):
         headers = [ [ 'Device Serial', cfg['serial'] ] ]
         for ifn in cfg['ips']:
             if_header = [ 'if_name', ifn ]
-            for atype in (2,17):
+            for atype in (netifaces.AF_LINK,netifaces.AF_INET,netifaces.AF_INET6):
                 if_header.append(cfg['ips'][ifn][atype])
             headers.append(if_header)
         headers.append([])
@@ -234,4 +234,8 @@ if __name__ == '__main__':
             mymain(cfg)
     except Exception as e:
         print('Whoops!',e)
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stdout)
+
 
