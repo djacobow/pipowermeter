@@ -28,6 +28,7 @@ base_config = {
         'do': True,
         'parent': '11EIJbrb8SA75A_SgIBAV6t8EWD8A1XiB',
         'period': 60,
+        'max_push_errors': 10,
      },
 }
 
@@ -175,6 +176,7 @@ class CapHandlers(object):
     def __init__(self, cfg):
         self.cfg = cfg
         self.cfg['tempdata'] = {}
+        self.push_errors = 0;
 
     # this removes some metadata from reading from the
     # meter that is nice for debug but the server has
@@ -210,8 +212,17 @@ class CapHandlers(object):
                 res = self.cfg['gconn']['g'].addRows(self.cfg['gconn']['id'], rowdata)
                 if res and res.get('updates',None) and res['updates'].get('updatedCells',None):
                     self.cfg['tempdata'] = {}
+                    self.push_errors = 0
+                else:
+                    print('Push error')
+                    self.push_errors += 1
             except Exception as e:
+                self.push_errors += 1
+                print('EXCEPTION')
                 print(e)
+        if self.push_errors > self.cfg['gsheet']['max_push_errors']:
+            exit(-1)
+
 
 
 
