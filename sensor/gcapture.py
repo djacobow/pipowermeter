@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sdnotify
 from sys import exit
 from os import system
 import netifaces
@@ -13,6 +14,7 @@ import Lights
 
 base_config = {
     'upload_period': 30,
+    'notify_period': 60,
     'read_period': 5,
     'config_check_period': 7200,
     'tick_length': 0.5,
@@ -101,6 +103,9 @@ def pre_run():
     cfg['afe'] = afe
     cfg['serial'] = getSerial()
     cfg['ips'] = getIPaddrs()
+    sdn = sdnotify.SystemdNotifier()
+    cfg['sdnotify'] = sdn
+    sdn.notify('READY=1')
 
     g, sheetid = gSetup(cfg)
     cfg['gconn'] = {
@@ -177,6 +182,8 @@ class CapHandlers(object):
         self.cfg = cfg
         self.cfg['tempdata'] = {}
         self.push_errors = 0;
+        self.readingCount = 0
+        self.pushCount = 0
 
     # this removes some metadata from reading from the
     # meter that is nice for debug but the server has
@@ -193,8 +200,10 @@ class CapHandlers(object):
         data = readSensor(self.cfg)
         self.stripUnwantedData(data)
         self.cfg['tempdata'][ts_sec] = data
-        self.cfg['lights'].show(data['Pmean']['value'])
-
+        #self.cfg['lights'].showMeasure(data['Pmean']['value'])
+        self.cfg['lights'].set(self.readingCount & 0x1,
+                               self.pushCount& 0x1)
+        self.readingCount += 1
 
     def dataToArray(self, d):
         names = self.cfg['sensor_params']['vars']
@@ -213,6 +222,7 @@ class CapHandlers(object):
                 if res and res.get('updates',None) and res['updates'].get('updatedCells',None):
                     self.cfg['tempdata'] = {}
                     self.push_errors = 0
+                    self.pushCount += 1
                 else:
                     print('Push error')
                     self.push_errors += 1
@@ -224,6 +234,11 @@ class CapHandlers(object):
             exit(-1)
 
 
+    def watchdog(self, name, now):
+        if True:
+            print('watchdog ping')
+            self.cfg['sdnotify'].notify('STATUS=Push_Errors is {}'.format(self.push_errors))
+            self.cfg['sdnotify'].notify('WATCHDOG=1')
 
 
 
@@ -234,6 +249,7 @@ def mymain(cfg):
 
     te.addHandler(ch.takeReading,  cfg['read_period'])
     te.addHandler(ch.doGPush,      cfg['upload_period'])
+    te.addHandler(ch.watchdog,     cfg['notify_period'])
     te.run(cfg['tick_length'])
 
 
