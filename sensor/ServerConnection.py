@@ -127,6 +127,8 @@ class ServerConnection(object):
             return res
         except Exception as e:
             print(e)
+            self.stats['consec_net_errs'] += 1
+            self.stats['ping_failures'] += 1
             return None
 
 
@@ -173,13 +175,20 @@ class ServerConnection(object):
         self._addLoginTok(data)
         self._addDiagInfo(data)
 
-        res = requests.post(self.config['post_url'], json = data, timeout=60)
-        self.stats['push_attempts'] += 1
-        if self.help.httpOK(res.status_code):
-            self.stats['consec_net_errs'] = 0
-        else:
+        try:
+            res = requests.post(self.config['post_url'], json = data, timeout=60)
+            self.stats['push_attempts'] += 1
+            if self.help.httpOK(res.status_code):
+                self.stats['consec_net_errs'] = 0
+            else:
+                self.stats['consec_net_errs'] += 1
+                self.stats['push_failures'] += 1
+
+        except Exception as e:
             self.stats['consec_net_errs'] += 1
             self.stats['push_failures'] += 1
+            return None
+
         return res
 
 
