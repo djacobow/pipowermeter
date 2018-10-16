@@ -2,17 +2,19 @@
 Description=Power Meter Daemon
 
 [Service]
-Type=simple
+Type=notify
 Restart=always
 User=pi
 Group=pi
 RestartSec=10
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=/home/pi/projects/pipowermeter/sensor
-ExecStart=/usr/bin/python3 -u /home/pi/projects/pipowermeter/sensor/capture.py
+ExecStart=/usr/bin/python3 -u /home/pi/projects/pipowermeter/sensor/gcapture.py
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=pipowermeter.service
+WatchdogSec=600
+NotifyAccess=all
 
 [Install]
 WantedBy=multi-user.target
