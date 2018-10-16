@@ -13,7 +13,12 @@ class Lights:
         else:
             self.thresholds = (0.005, 0.050, 0.100)
    
-    def show(self, val):
+    def set(self,a=False,b=False):
+        GPIO.output(22,True if a else False)
+        GPIO.output(27,True if b else False)
+
+
+    def showMeasure(self, val):
         level = 0
         while level < len(self.thresholds) and val >= self.thresholds[level]:
             level += 1
@@ -36,15 +41,15 @@ class Lights:
 
 if __name__ == '__main__':
     l = Lights()
-    l.show(0)
+    l.showMeasure(0)
     time.sleep(1)
-    l.show(0.006)
+    l.showMeasure(0.006)
     time.sleep(1)
-    l.show(0.060)
+    l.showMeasure(0.060)
     time.sleep(1)
-    l.show(0.600)
+    l.showMeasure(0.600)
     time.sleep(1)
-    l.show(0.000)
+    l.showMeasure(0.000)
     time.sleep(1)
 
 
