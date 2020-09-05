@@ -12,6 +12,8 @@ import Backgrounder
 import json
 from influxdb import InfluxDBClient
 import Lights
+import paho.mqtt.client as mqtt
+
 
 base_config = {
     'upload_period': 30,
@@ -28,12 +30,19 @@ base_config = {
         ],
     },
     'influx': {
-        'do': True,
+        'do': False,
         'database': 'powerdemo',
         #'user': 'bloop',
         #'password': 'fill_this_in',
         'port': 8086,
         'host': 'ec2-34-220-91-92.us-west-2.compute.amazonaws.com',
+    },
+    'mqtt': {
+        'do': True,
+        "host": "35.236.54.162",
+        "topic": "david/powermeter",
+        #"user": "bloop",
+        #"password": "fill_this_in",
     },
     'stats': {
         'max_push_errors': 10,
@@ -74,6 +83,13 @@ def iSetup(cfg):
     return i
 
 
+def mSetup(cfg):
+    c = cfg['mqtt']
+    m = None
+    if c.get('do',False):
+        m = mqtt.Client('powerclient')
+        m.username_pw_set(cfg['mqtt']['user'],cfg['mqtt']['password'])
+    return m
 
 
 def pre_run():
@@ -101,6 +117,8 @@ def pre_run():
 
     i = iSetup(cfg)
     cfg['iconn'] = i
+    m = mSetup(cfg)
+    cfg['mconn'] = m
 
     return cfg
 
@@ -183,31 +201,61 @@ class CapHandlers(object):
             rdata.append([timestamp] + values)
         return rdata
 
+
     def doIPush(self, name, now):
         if self.cfg['iconn'] is not None:
             try:
                 tdata = self.cfg['tempdata']
 
-                odata = []
-                for ts in tdata:
-                    tdatum = tdata[ts]
-                    for vname in tdatum:
-                        vval = tdatum[vname]['value']
-                        odatum = {
-                            'measurement': vname,
-                            'time': datetime.datetime.utcfromtimestamp(ts),
-                            'fields': { 
-                                'value': vval,
+                def oneWay(tdata):
+                    odata = []
+                    for ts in tdata:
+                        tdatum = tdata[ts]
+                        for vname in tdatum:
+                            vval = tdatum[vname]['value']
+                            odatum = {
+                                'measurement': vname,
+                                'time': datetime.datetime.utcfromtimestamp(ts),
+                                'fields': { 
+                                    'value': vval,
+                                }
                             }
-                        }
-                        odata.append(odatum)
+                            odata.append(odatum)
+                    tags = {
+                        'source': 'daves_power_meter',
+                        'afe': 'atm90e26',
+                    }
+                    # print(odata)
+                    res = self.cfg['iconn'].write_points(odata,tags=tags)
+                    return res
 
-                tags = {
-                    'source': 'daves_power_meter',
-                }
-                # print(odata)
-                res = self.cfg['iconn'].write_points(odata,tags=tags)
-                if res:
+
+                def anotherWay(tdata):
+                    odata = []
+                    for ts in tdata:
+                        tdatum = tdata[ts]
+                        fields = { k : v['value'] for (k,v) in tdatum.items() }
+                        odatum = {
+                            'measurement': 'meter0',
+                            'time': datetime.datetime.utcfromtimestamp(ts),
+                            'fields': fields,
+                        }
+
+                        odata.append(odatum)
+                    tags = {
+                        'source': 'daves_power_meter',
+                        'afe': 'atm90e26',
+                    }
+                    res = self.cfg['iconn'].write_points(odata,tags=tags,database='powerdemo2')
+                    return res
+
+
+                res1 = anotherWay(tdata)
+                if not res1:
+                    print('anotherWay post error',res1)
+
+                res0 = oneWay(tdata)
+                if res0:
                     self.cfg['tempdata'] = {}
                     self.push_errors = 0
                     self.pushCount += 1
@@ -230,6 +278,39 @@ class CapHandlers(object):
             self.cfg['sdnotify'].notify('WATCHDOG=1')
 
 
+    def doMPush(self, name, now):
+        if self.cfg['mconn'] is not None:
+            c = self.cfg['mconn']
+            try:
+                tdata = self.cfg['tempdata']
+                odata = []
+                for ts in tdata:
+                    tdatum = tdata[ts]
+                    fields = { k : v['value'] for (k,v) in tdatum.items() }
+                    odatum = {
+                        'measurement': 'meter0',
+                        'time': str(datetime.datetime.utcfromtimestamp(ts)),
+                        'fields': fields,
+                    }
+                    odata.append(odatum)
+
+                ofinal = {
+                    'source': 'daves_power_meter',
+                    'afe': 'atm90e26',
+                    'data': odata,
+                }
+                c.connect(cfg['mqtt']['host'])
+                pres = c.publish(cfg['mqtt']['topic'],json.dumps(ofinal))
+                c.disconnect()
+                self.push_errors = 0
+                self.pushCount += 1
+            except Exception as e:
+                self.push_errors += 1
+                print('EXCEPTION: {}'.format(repr(e)))
+            if self.push_errors > self.cfg['stats']['max_push_errors']:
+                exit(-1)
+
+
 
 def mymain(cfg):
 
@@ -238,6 +319,7 @@ def mymain(cfg):
 
     te.addHandler(ch.takeReading,  cfg['read_period'])
     te.addHandler(ch.doIPush,      cfg['upload_period'])
+    te.addHandler(ch.doMPush,      cfg['upload_period'])
     te.addHandler(ch.watchdog,     cfg['notify_period'])
     te.run(cfg['tick_length'])
 
